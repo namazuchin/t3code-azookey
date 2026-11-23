@@ -29,9 +29,9 @@ enum T3ComposerClipboard {
   static func write(text: String, fragment: String) {}
 }
 """
-Path(sys.argv[2]).write_text(source + "\n" + stubs + "\n" + (module / "tests/ios/main.swift").read_text())
+Path(sys.argv[2]).write_text(source + "\n" + (module / "ios/T3AzooKeyComposition.swift").read_text() + "\n" + stubs + "\n" + (module / "tests/ios/main.swift").read_text())
 PYTHON
-"$compiler" -target "$(uname -m)-apple-ios16.1-macabi" -sdk "$sdk" \
+"$compiler" -D T3_COMPOSER_TESTS -module-cache-path "$output/module-cache" -target "$(uname -m)-apple-ios16.1-macabi" -sdk "$sdk" \
   -F "$sdk/System/iOSSupport/System/Library/Frameworks" \
   "$output/main.swift" -o "$output/editor-tests"
-"$output/editor-tests"
+"$output/editor-tests" "$@"

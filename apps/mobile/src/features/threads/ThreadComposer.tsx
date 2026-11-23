@@ -1,11 +1,13 @@
 import { Button } from "../../components/ui/Button";
 import * as Dialog from "../../components/ui/Dialog";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
+import { composerAzooKeyAvailable } from "../../native/composerAzooKey";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { settlePromise, squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { AsyncResult } from "effect/reactivity";
 import { useAtomValue } from "@effect/atom-react";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import { clampFileAttachmentUploadBytes } from "@t3tools/client-runtime/state/attachments";
 import { pastedTextDisposition, replaceTextSelection } from "@t3tools/client-runtime/text-paste";
 import {
@@ -257,6 +259,14 @@ function SendActionButton(props: {
 }
 
 export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps) {
+  const preferences = useAtomValue(mobilePreferencesAtom);
+  const azooKeyEnabled =
+    composerAzooKeyAvailable &&
+    AsyncResult.isSuccess(preferences) &&
+    preferences.value.composerAzooKeyEnabled === true;
+  const [azooKeyPreview, setAzooKeyPreview] = useState<{ draftKey: string; text: string } | null>(
+    null,
+  );
   const gt = useGT();
   const messages = useMessages();
   const project = useProject(scopeProjectRef(props.environmentId, props.selectedThread.projectId));
@@ -561,7 +571,10 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
     const threadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
     if (inFlightThreadIdsRef.current.has(threadKey)) return;
     inFlightThreadIdsRef.current.add(threadKey);
-    await inputRef.current?.flushPendingInput();
+    if ((await inputRef.current?.flushPendingInput()) === false) {
+      inFlightThreadIdsRef.current.delete(threadKey);
+      return;
+    }
     const draftAtSend = getComposerDraftSnapshot(composerDraftKey);
     const stillSendable = () => {
       const draft = getComposerDraftSnapshot(composerDraftKey);
@@ -808,6 +821,13 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
             error={voiceInput.state.phase === "error" ? voiceInput.state.error : null}
             onDismiss={voiceInput.cancel}
           />
+          {azooKeyEnabled &&
+          azooKeyPreview?.draftKey === composerDraftKey &&
+          azooKeyPreview.text ? (
+            <Text accessibilityLiveRegion="polite" className="px-4 text-xs text-foreground-muted">
+              azooKey: {azooKeyPreview.text}
+            </Text>
+          ) : null}
           {isExpanded ? editingAttachments : null}
           {attachmentBlockReason !== null ? (
             <View className="flex-row items-center gap-1.5 px-4 py-1.5">
@@ -872,6 +892,11 @@ export const ThreadComposer = function ThreadComposer(props: ThreadComposerProps
                 <ComposerEditor
                   hidden={props.hidden}
                   draftKey={composerDraftKey}
+                  azooKeyEnabled={azooKeyEnabled}
+                  azooKeyContext={composerDraftKey}
+                  onAzooKeyPreedit={(text) =>
+                    setAzooKeyPreview(text ? { draftKey: composerDraftKey, text } : null)
+                  }
                   environmentId={props.environmentId}
                   onOpenMention={(path) => {
                     Keyboard.dismiss();

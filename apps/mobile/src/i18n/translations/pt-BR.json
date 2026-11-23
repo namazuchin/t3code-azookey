@@ -5505,5 +5505,7 @@
   "856812e7e1fc445e": "Chamadas de ferramentas no chat",
   "8d545d54c0a9e950": "Oculta os comandos, edições e pesquisas que os agentes executam. \"Ocultar bem-sucedidas\" mantém as falhas. Zen mostra só as respostas finais. Aprovações, perguntas e erros sempre aparecem.",
   "99d51127f573296b": "Outra conta",
-  "8ec2c57414669b79": "Conecte um segundo espaço de trabalho ou usuário do {tracker}."
+  "8ec2c57414669b79": "Conecte um segundo espaço de trabalho ou usuário do {tracker}.",
+  "82750bfcaef60d24": "Ativado",
+  "ae9ec94d5335d4bc": "Japonês com teclado físico: Espaço converte, Enter confirma e Esc cancela."
 }

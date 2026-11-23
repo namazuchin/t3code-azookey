@@ -51,6 +51,7 @@ public class T3ComposerEditorModule: Module {
   }
 
   public func definition() -> ModuleDefinition {
+    Constants(["azooKeyAvailable": T3AzooKeyEngine.isAvailable])
     View(T3ComposerEditorView.self) {
       Prop("controlledDocumentJson") { (view: T3ComposerEditorView, documentJson: String) in
         view.setControlledDocumentJson(documentJson)
@@ -100,6 +101,12 @@ public class T3ComposerEditorModule: Module {
       Prop("alternateSubmitTitle") { (view: T3ComposerEditorView, title: String) in
         view.setAlternateSubmitTitle(title)
       }
+      Prop("azooKeyContext") { (view: T3ComposerEditorView, context: String) in
+        view.setAzooKeyContext(context)
+      }
+      Prop("azooKeyEnabled") { (view: T3ComposerEditorView, enabled: Bool) in
+        view.setAzooKeyEnabled(enabled)
+      }
       Prop("enterBehavior") { (view: T3ComposerEditorView, behavior: String) in
         view.setEnterBehavior(behavior)
       }
@@ -112,6 +119,7 @@ public class T3ComposerEditorModule: Module {
 
       Events(
         "onComposerChange",
+        "onAzooKeyPreedit",
         "onComposerSelectionChange",
         "onComposerFocus",
         "onComposerBlur",

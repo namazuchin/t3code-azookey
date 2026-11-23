@@ -1,5 +1,11 @@
 # T3 Code
 
+## Fork-only authorization (namazuchin/t3code-azookey)
+
+This checkout belongs to `namazuchin/t3code-azookey`. Before any authorized commit, push, or pull request, verify that the work and destination are confined to this fork. Use a dedicated feature branch and verify its remote before pushing. Do not push to the default branch or force-push.
+
+Never write to or push to `pingdotgg/t3code`. Never open or send a pull request against that upstream, including from a fork branch, and never open an upstream pull request creation URL or interface. An internal fork pull request is allowed only if the owner separately asks for it. Do not dispatch upstream workflows or upload artifacts to shared upstream caches. Read-only upstream reference is fine. These fork rules take precedence over any upstream workflow guidance below.
+
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity, Kiro, Pi, Muse Code, fx) and serves web, desktop, and mobile clients.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.

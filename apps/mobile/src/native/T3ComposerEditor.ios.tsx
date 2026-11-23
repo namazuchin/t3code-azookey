@@ -84,6 +84,7 @@ interface NativeComposerEditorRef {
     readonly eventCount: number;
     readonly resetGeneration: number;
     readonly pasteEventCount: number;
+    readonly hasAzooKeyPreedit: boolean;
   }>;
 }
 
@@ -100,6 +101,11 @@ interface NativeComposerEditorProps extends ViewProps {
   readonly editable: boolean;
   readonly readOnly: boolean;
   readonly enterBehavior: string;
+  readonly azooKeyEnabled: boolean;
+  readonly azooKeyContext: string;
+  readonly onAzooKeyPreedit?: (
+    event: NativeSyntheticEvent<{ readonly text: string; readonly context: string }>,
+  ) => void;
   readonly submitTitle: string;
   readonly alternateSubmitTitle: string;
   readonly scrollEnabled: boolean;
@@ -344,6 +350,14 @@ export function ComposerEditor({
       const state = await Promise.resolve()
         .then(() => nativeRef.current?.readState())
         .catch(() => undefined);
+      if (
+        props.azooKeyEnabled &&
+        (!state ||
+          state.hasAzooKeyPreedit ||
+          state.pasteEventCount > mostRecentEventCountRef.current)
+      ) {
+        return false;
+      }
       // Acknowledging past a paste JS has not received yet would get the paste rejected.
       if (state && state.pasteEventCount <= mostRecentEventCountRef.current) {
         applyNativeChange(state);
@@ -376,6 +390,13 @@ export function ComposerEditor({
       editable={props.editable ?? true}
       readOnly={props.readOnly ?? false}
       enterBehavior={props.enterBehavior ?? DEFAULT_COMPOSER_ENTER_BEHAVIOR}
+      azooKeyEnabled={props.azooKeyEnabled ?? false}
+      azooKeyContext={props.azooKeyContext ?? ""}
+      onAzooKeyPreedit={(event) => {
+        if (event.nativeEvent.context === (props.azooKeyContext ?? "")) {
+          props.onAzooKeyPreedit?.(event.nativeEvent.text);
+        }
+      }}
       submitTitle={props.submitTitle ?? gt("Send Message")}
       alternateSubmitTitle={props.alternateSubmitTitle ?? props.submitTitle ?? gt("Send Message")}
       scrollEnabled={props.scrollEnabled ?? true}

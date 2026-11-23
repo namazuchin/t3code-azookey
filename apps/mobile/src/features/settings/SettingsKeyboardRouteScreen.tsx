@@ -3,6 +3,7 @@ import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScroll
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { Platform } from "react-native";
+import { composerAzooKeyAvailable } from "../../native/composerAzooKey";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText as Text } from "../../components/ui/AppText";
@@ -52,6 +53,10 @@ export function SettingsKeyboardRouteScreen() {
     ? (preferencesResult.value.composerEnterBehavior ?? DEFAULT_COMPOSER_ENTER_BEHAVIOR)
     : null;
 
+  const azooKeyEnabled =
+    AsyncResult.isSuccess(preferencesResult) &&
+    preferencesResult.value.composerAzooKeyEnabled === true;
+
   return (
     <SettingsScreen title={gt("Keyboard")}>
       <ScrollView
@@ -76,6 +81,26 @@ export function SettingsKeyboardRouteScreen() {
             />
           ))}
         </SettingsSection>
+        {composerAzooKeyAvailable ? (
+          <SettingsSection title="azooKey">
+            <SettingsChoiceRow
+              label={gt("Off")}
+              selected={!azooKeyEnabled}
+              disabled={!preferencesReady}
+              onPress={() => void savePreferences({ composerAzooKeyEnabled: false })}
+            />
+            <SettingsChoiceRow
+              label={gt("On")}
+              description={gt(
+                "Japanese with a hardware keyboard: Space converts, Return confirms, Escape cancels.",
+              )}
+              selected={azooKeyEnabled}
+              separated
+              disabled={!preferencesReady}
+              onPress={() => void savePreferences({ composerAzooKeyEnabled: true })}
+            />
+          </SettingsSection>
+        ) : null}
         <Text className="px-2 text-sm text-foreground-muted">
           <T>Applies to the composer when a hardware keyboard is connected.</T>
         </Text>

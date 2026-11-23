@@ -101,6 +101,152 @@ private final class ComposerTextView: UITextView {
   var alternateSubmitTitle = "Send Message"
   private var bypassTextPasteInterception = false
 
+  var azooKeyEnabled = false {
+    didSet { if !azooKeyEnabled { discardAzooKeyInteraction() } }
+  }
+  var onAzooKeyPreedit: ((String) -> Void)?
+  private var azooKeyComposition = T3AzooKeyComposition()
+  private lazy var azooKeyEngine = T3AzooKeyEngine()
+  private var azooKeyHandledPresses: Set<UIPress> = []
+  private var azooKeySendOnRelease: UIPress?
+  var hasAzooKeyPreedit: Bool { azooKeyComposition.isActive }
+
+  func cancelAzooKeySend() { azooKeySendOnRelease = nil }
+
+  func discardAzooKeyInteraction() {
+    cancelAzooKeySend()
+    cancelAzooKey()
+  }
+
+  func cancelAzooKey() {
+    guard hasAzooKeyPreedit else { return }
+    azooKeyComposition = T3AzooKeyComposition()
+    onAzooKeyPreedit?("")
+  }
+
+  @discardableResult
+  func commitAzooKey() -> Bool {
+    guard hasAzooKeyPreedit else { return true }
+    guard isEditable, !isReadOnly else { return false }
+    var composition = azooKeyComposition
+    guard let result = composition.takeCommit(
+      kana: azooKeyEngine.kana(composition.roman, final: true)
+    ) else { return false }
+    let sourceLength = sourceOffset(forDisplayOffset: textStorage.length)
+    let selectedLength = sourceOffset(forDisplayOffset: NSMaxRange(selectedRange)) -
+      sourceOffset(forDisplayOffset: selectedRange.location)
+    guard sourceLength - selectedLength + result.utf16.count <= maxInputChars else { return false }
+    guard let range = selectedTextRange else { return false }
+    cancelAzooKey()
+    replace(range, withText: result)
+    return true
+  }
+
+  func handleAzooKey(_ key: UIKeyboardHIDUsage, characters: String) -> Bool {
+    guard azooKeyEnabled, isEditable, !isReadOnly, markedTextRange == nil else { return false }
+    if hasAzooKeyPreedit {
+      switch key {
+      case .keyboardReturnOrEnter, .keypadEnter:
+        commitAzooKey()
+        return true
+      case .keyboardEscape:
+        cancelAzooKey()
+        return true
+      case .keyboardDeleteOrBackspace:
+        azooKeyComposition.backspace()
+        publishAzooKey()
+        return true
+      case .keyboardSpacebar:
+        if azooKeyComposition.candidates.isEmpty {
+          let input = azooKeyComposition.roman
+          azooKeyComposition.convert(
+            azooKeyEngine.convert(input), kana: azooKeyEngine.kana(input, final: true)
+          )
+        } else {
+          azooKeyComposition.cycle(1)
+        }
+        publishAzooKey()
+        return true
+      case .keyboardUpArrow, .keyboardDownArrow:
+        if !azooKeyComposition.candidates.isEmpty {
+          azooKeyComposition.cycle(key == .keyboardUpArrow ? -1 : 1)
+          publishAzooKey()
+          return true
+        }
+      default:
+        break
+      }
+    }
+    guard let ascii = characters.utf8.first, characters.utf8.count == 1,
+          (97...122).contains(ascii) || (ascii == 39 && hasAzooKeyPreedit) else { return false }
+    if azooKeyComposition.roman.utf8.count >= 64 && !commitAzooKey() { return true }
+    azooKeyComposition.append(characters)
+    publishAzooKey()
+    return true
+  }
+
+  private func publishAzooKey() {
+    let roman = azooKeyComposition.roman
+    onAzooKeyPreedit?(azooKeyComposition.preview(kana: azooKeyEngine.kana(roman)))
+  }
+
+  override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    var forwarded = presses
+    for press in presses {
+      if azooKeyHandledPresses.contains(press) {
+        forwarded.remove(press)
+        continue
+      }
+      guard let key = press.key else { continue }
+      if key.modifierFlags.contains(.shift), !key.modifierFlags.contains(.command),
+         !key.modifierFlags.contains(.control), !key.modifierFlags.contains(.alternate),
+         key.characters.utf8.count == 1, let byte = key.characters.utf8.first,
+         (33...126).contains(byte), hasAzooKeyPreedit {
+        if !commitAzooKey() {
+          azooKeyHandledPresses.insert(press)
+          forwarded.remove(press)
+        }
+        continue
+      }
+      guard key.modifierFlags.isEmpty else { continue }
+      if handleAzooKey(key.keyCode, characters: key.characters) {
+        azooKeyHandledPresses.insert(press)
+        forwarded.remove(press)
+      } else if azooKeyEnabled, isEditable, !isReadOnly, markedTextRange == nil,
+                key.keyCode == .keyboardReturnOrEnter, enterBehavior == .send {
+        // A Return that committed a candidate never reaches this branch. Delay actual
+        // submission to key-up so holding Return can't both commit and send.
+        azooKeyHandledPresses.insert(press)
+        azooKeySendOnRelease = press
+        forwarded.remove(press)
+      } else if hasAzooKeyPreedit, key.characters.utf8.count == 1,
+                let byte = key.characters.utf8.first, (33...126).contains(byte), !commitAzooKey() {
+        azooKeyHandledPresses.insert(press)
+        forwarded.remove(press)
+      }
+    }
+    if !forwarded.isEmpty { super.pressesBegan(forwarded, with: event) }
+  }
+
+  override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    let forwarded = presses.subtracting(azooKeyHandledPresses)
+    azooKeyHandledPresses.subtract(presses)
+    if let submit = azooKeySendOnRelease, presses.contains(submit) {
+      azooKeySendOnRelease = nil
+      if azooKeyEnabled, isEditable, !isReadOnly, markedTextRange == nil, !hasAzooKeyPreedit {
+        onSubmit?(false)
+      }
+    }
+    if !forwarded.isEmpty { super.pressesEnded(forwarded, with: event) }
+  }
+
+  override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    let forwarded = presses.subtracting(azooKeyHandledPresses)
+    azooKeyHandledPresses.subtract(presses)
+    if let submit = azooKeySendOnRelease, presses.contains(submit) { azooKeySendOnRelease = nil }
+    if !forwarded.isEmpty { super.pressesCancelled(forwarded, with: event) }
+  }
+
   override var keyCommands: [UIKeyCommand]? {
     var commands = super.keyCommands ?? []
     guard !isReadOnly, markedTextRange == nil else { return commands }
@@ -112,7 +258,7 @@ private final class ComposerTextView: UITextView {
       )
       submitOnReturn.discoverabilityTitle = submitTitle
       submitOnReturn.wantsPriorityOverSystemBehavior = true
-      commands.append(submitOnReturn)
+      if !azooKeyEnabled { commands.append(submitOnReturn) }
 
       let submitAlternate = UIKeyCommand(
         input: "\r",
@@ -164,17 +310,17 @@ private final class ComposerTextView: UITextView {
   }
 
   @objc private func submitMessage(_ sender: UIKeyCommand) {
-    guard !isReadOnly, markedTextRange == nil else { return }
+    guard !isReadOnly, markedTextRange == nil, !hasAzooKeyPreedit else { return }
     onSubmit?(false)
   }
 
   @objc private func submitMessageAlternate(_ sender: UIKeyCommand) {
-    guard !isReadOnly, markedTextRange == nil else { return }
+    guard !isReadOnly, markedTextRange == nil, !hasAzooKeyPreedit else { return }
     onSubmit?(true)
   }
 
   @objc private func insertNewline(_ sender: UIKeyCommand) {
-    guard !isReadOnly, markedTextRange == nil else { return }
+    guard !isReadOnly, markedTextRange == nil, !hasAzooKeyPreedit else { return }
     insertText("\n")
   }
 
@@ -217,6 +363,7 @@ private final class ComposerTextView: UITextView {
   }
 
   override func paste(itemProviders: [NSItemProvider]) {
+    guard commitAzooKey() else { return }
     guard isEditable, !isReadOnly else { return }
     if !itemProviders.isEmpty,
        itemProviders.allSatisfy({ $0.canLoadObject(ofClass: UIImage.self) }) {
@@ -227,6 +374,7 @@ private final class ComposerTextView: UITextView {
   }
 
   override func paste(_ sender: Any?) {
+    guard commitAzooKey() else { return }
     guard !isReadOnly else {
       return
     }
@@ -365,6 +513,7 @@ private final class ComposerTextView: UITextView {
   }
 
   override func cut(_ sender: Any?) {
+    cancelAzooKey()
     guard !isReadOnly else {
       return
     }
@@ -525,9 +674,11 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
   private var hasDeferredForcedRebuild = false
   private var pendingContentOffset: CGPoint?
   private var needsSelectionReveal = false
+  private var azooKeyContext = ""
   private var selectionBeforeFocusingTap: (selection: ComposerSelectionPayload, value: String)?
 
   let onComposerChange = EventDispatcher()
+  let onAzooKeyPreedit = EventDispatcher()
   let onComposerSelectionChange = EventDispatcher()
   let onComposerFocus = EventDispatcher()
   let onComposerBlur = EventDispatcher()
@@ -591,6 +742,10 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
         "text": text,
         "selection": ["start": selection.start, "end": selection.end],
       ])
+    }
+    textView.onAzooKeyPreedit = { [weak self] text in
+      guard let self else { return }
+      self.onAzooKeyPreedit(["text": text, "context": self.azooKeyContext])
     }
     textView.onSubmit = { [weak self] alternate in
       self?.onComposerSubmit(["alternate": alternate])
@@ -746,6 +901,9 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
     guard isReset || document.mostRecentEventCount >= nativeEventCount else {
       return
     }
+    if isReset || (!document.isNativeEcho && !value.utf16.elementsEqual(document.value.utf16)) {
+      textView.discardAzooKeyInteraction()
+    }
     if isReset {
       resetGeneration = document.resetGeneration
       // JS drops a paste from before the reset by generation, so the flush must not wait for it.
@@ -857,6 +1015,16 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
     textView.spellCheckingType = spellCheck ? .yes : .no
   }
 
+  func setAzooKeyContext(_ context: String) {
+    guard azooKeyContext != context else { return }
+    azooKeyContext = context
+    textView.discardAzooKeyInteraction()
+  }
+
+  func setAzooKeyEnabled(_ enabled: Bool) {
+    textView.azooKeyEnabled = enabled && T3AzooKeyEngine.isAvailable
+  }
+
   func setEnterBehavior(_ behavior: String) {
     textView.enterBehavior = ComposerEnterBehavior(rawValue: behavior) ?? .send
   }
@@ -886,6 +1054,7 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
   }
 
   func readState() -> [String: Any] {
+    let committed = textView.commitAzooKey()
     let selection = sourceSelection()
     return [
       "value": value,
@@ -893,6 +1062,7 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
       "eventCount": nativeEventCount,
       "resetGeneration": resetGeneration,
       "pasteEventCount": lastPasteEventCount,
+      "hasAzooKeyPreedit": !committed,
     ]
   }
 
@@ -904,6 +1074,7 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
   }
 
   public func textViewDidChange(_ textView: UITextView) {
+    self.textView.cancelAzooKey()
     emitTextChange()
   }
 
@@ -911,6 +1082,7 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
     guard !isApplyingControlledValue else {
       return
     }
+    self.textView.cancelAzooKey()
     restoreBaseTypingAttributes()
     // UIKit moves the selection before textViewDidChange runs. Emitting here
     // would pair the post-edit text with a pre-edit revision counter, so let
@@ -977,6 +1149,7 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
   }
 
   public func textViewDidEndEditing(_ textView: UITextView) {
+    self.textView.cancelAzooKeySend()
     onComposerBlur()
   }
 
@@ -1300,6 +1473,7 @@ public final class T3ComposerEditorView: ExpoView, UITextViewDelegate, UITextDro
     guard !NSEqualRanges(nextRange, textView.selectedRange) else {
       return
     }
+    textView.cancelAzooKey()
     isApplyingControlledValue = true
     textView.selectedRange = nextRange
     isApplyingControlledValue = false

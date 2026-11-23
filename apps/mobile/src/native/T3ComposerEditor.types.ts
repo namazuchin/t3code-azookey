@@ -23,8 +23,8 @@ export interface ComposerEditorHandle {
   focus: () => void;
   blur: () => void;
   setSelection: (selection: ComposerEditorSelection) => void;
-  /** iOS: resolves once a native edit still in flight has reached `onChangeText`. */
-  flushPendingInput: () => Promise<void>;
+  /** iOS: flushes native edits, or returns false if azooKey preedit cannot be committed. */
+  flushPendingInput: () => Promise<void | false>;
 }
 
 export interface ComposerEditorProps {
@@ -89,6 +89,10 @@ export interface ComposerEditorProps {
   }) => void;
   /** Hardware-keyboard Return behavior. Soft keyboards always insert a newline. */
   readonly enterBehavior?: ComposerEnterBehavior;
+  /** iOS thread composer only. Other editors keep the system keyboard. */
+  readonly azooKeyEnabled?: boolean;
+  readonly azooKeyContext?: string;
+  readonly onAzooKeyPreedit?: (preview: string) => void;
   readonly submitTitle?: string;
   readonly alternateSubmitTitle?: string;
   /** Command chords (Ctrl on Android) reverse the configured follow-up behavior. */

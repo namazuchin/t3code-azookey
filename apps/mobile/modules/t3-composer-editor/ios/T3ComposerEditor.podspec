@@ -12,6 +12,16 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  azookey = File.expand_path('../../../../../.t3/azookey-ios', __dir__)
+  if File.directory?(azookey)
+    require 'digest'
+    expected = '0e90cf9d673dc8edfcf13360e340ed537342c918733cc6b62f3b881ce0348dd8'
+    actual = Digest::SHA256.file(File.join(azookey, 'Sources/SwiftUtils/Debug.swift')).hexdigest
+    abort 'Unverified azooKey debug behavior; run prepare-azookey-ios.sh in a fresh checkout' unless actual == expected
+    spm_dependency(
+      s, url: azookey, requirement: {}, products: ['KanaKanjiConverterModuleWithDefaultDictionary']
+    )
+  end
   # Swift/Objective-C compatibility
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',

@@ -43,9 +43,72 @@ func mention(_ label: String, at start: Int, source: String = "@README.md") -> S
 func makeEditor(_ value: String, tokensJson: String = "[]") -> T3ComposerEditorView {
   let view = T3ComposerEditorView()
   view.frame = CGRect(x: 0, y: 0, width: 320, height: 200)
+  view.setMaxInputChars(100_000)
   view.setControlledDocumentJson(document(value, revision: 0, tokensJson: tokensJson))
   check(view.text == value, "Initial controlled value was not applied")
   return view
+}
+
+func testAzooKey() {
+  // Hardware IME keeps preedit/Space/Return out of the native draft and submit event.
+  do {
+    let view = makeEditor("先: [name]")
+    view.setAzooKeyEnabled(true)
+    view.editor.selectedRange = NSRange(location: 4, length: 4)
+    let native = view.editor as! ComposerTextView
+    for letter in "nihongo" { check(native.handleAzooKey(.keyboardA, characters: String(letter)), "Roman key was not intercepted") }
+    check(view.text == "先: [name]" && view.onComposerChange.payloads.isEmpty, "Preedit changed committed draft")
+    check(native.handleAzooKey(.keyboardSpacebar, characters: " "), "Space did not start conversion")
+    check((view.onAzooKeyPreedit.payloads.last?["text"] as? String)?.hasPrefix("日本語") == true, "First candidate missing")
+    check(native.handleAzooKey(.keyboardDownArrow, characters: ""), "Arrow did not select candidate")
+    check((view.onAzooKeyPreedit.payloads.last?["text"] as? String)?.hasPrefix("にほんご") == true, "Candidate choice not visible")
+    check(native.handleAzooKey(.keyboardUpArrow, characters: ""), "Arrow did not select first candidate")
+    check(native.handleAzooKey(.keyboardReturnOrEnter, characters: "\r"), "Return did not commit")
+    check(view.text == "先: [日本語]" && view.onComposerSubmit.payloads.isEmpty, "Return failed to replace selection without sending: \(view.text)")
+  }
+
+  do {
+    let view = makeEditor("retained")
+    view.setAzooKeyEnabled(true)
+    let native = view.editor as! ComposerTextView
+    check(native.handleAzooKey(.keyboardA, characters: "a"), "Preedit did not start")
+    check(native.handleAzooKey(.keyboardEscape, characters: ""), "Escape did not cancel")
+    check(!native.hasAzooKeyPreedit && view.text == "retained", "Escape modified draft")
+    check(native.handleAzooKey(.keyboardA, characters: "a"), "Second preedit did not start")
+    let revision = view.readState()["eventCount"] as! Int
+    check(native.handleAzooKey(.keyboardA, characters: "a"), "Third preedit did not start")
+    view.setControlledDocumentJson(document("newer", revision: revision, resetGeneration: 1))
+    check(!native.hasAzooKeyPreedit && view.text == "newer", "Reset lost to obsolete preedit")
+    check(native.handleAzooKey(.keyboardA, characters: "a"), "Fourth preedit did not start")
+    let nextCaret = native.selectedRange.location == 1 ? 2 : 1
+    view.setSelection(start: nextCaret, end: nextCaret)
+    check(!native.hasAzooKeyPreedit && view.text == "newer", "Caret move committed or retained stale preedit")
+    check(native.handleAzooKey(.keyboardA, characters: "a"), "Draft-switch preedit did not start")
+    view.setAzooKeyContext("different-thread")
+    check(!native.hasAzooKeyPreedit && view.text == "newer", "Draft switch retained preedit")
+    view.setAzooKeyEnabled(false)
+    check(!native.handleAzooKey(.keyboardA, characters: "a"), "Opt-out intercepted system input")
+  }
+
+  do {
+    let token = "@README.md"
+    let view = makeEditor(token + " ", tokensJson: mention("README.md", at: 0))
+    let chip = view.chip(at: 0)
+    view.editor.selectedRange = NSRange(location: 2, length: 0)
+    view.setAzooKeyEnabled(true)
+    let native = view.editor as! ComposerTextView
+    for letter in "nihongo" { _ = native.handleAzooKey(.keyboardA, characters: String(letter)) }
+    _ = native.handleAzooKey(.keyboardSpacebar, characters: " ")
+    let payload = view.readState()
+    check(payload["value"] as? String == token + " 日本語", "Send flush did not include committed candidate")
+    check(view.chip(at: 0) === chip && view.onComposerSubmit.payloads.isEmpty, "Send flush changed existing chip or emitted a submit")
+  }
+}
+
+testAzooKey()
+if CommandLine.arguments.contains("--azookey-only") {
+  print("azooKey composer tests passed")
+  exit(0)
 }
 
 // A send clears the draft after an autocorrection the parent had not received yet.

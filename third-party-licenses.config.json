@@ -1,6 +1,20 @@
 {
   "customNotices": [
     {
+      "name": "azooKey Kana-Kanji Converter",
+      "bundles": ["mobile"],
+      "license": "MIT",
+      "sourceUrl": "https://github.com/azooKey/AzooKeyKanaKanjiConverter/releases/tag/v0.8.5",
+      "noticeFile": "apps/mobile/modules/t3-composer-editor/third-party/LICENSE.azooKey"
+    },
+    {
+      "name": "azooKey Standard Dictionary",
+      "bundles": ["mobile"],
+      "license": "Apache-2.0",
+      "sourceUrl": "https://github.com/ensan-hcl/azooKey_dictionary_storage/tree/7ed1c6b3e361e9f453d23beefa344422f4027eb1",
+      "noticeFile": "apps/mobile/modules/t3-composer-editor/third-party/LICENSE.azooKey-dictionary"
+    },
+    {
       "bundles": ["desktop", "mobile"],
       "license": "MIT",
       "name": "Apple Speech engine (adapted from @react-native-ai/apple)",
