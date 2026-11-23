@@ -26,9 +26,10 @@ On iOS/iPadOS, turn on **Settings → Keyboard → azooKey** to use an attached
 hardware keyboard for lowercase romaji input in the chat composer. Use an
 English/Roman hardware layout: Space starts or cycles dictionary candidates,
 Up/Down moves the choice, Return commits, and Escape cancels. A separate
-Return uses the configured send/newline behavior. Tapping Send on a draft
-with pending input commits what is shown before sending. The option is off by
-default; disable it to return to the ordinary system keyboard behavior.
+Return uses the configured send/newline behavior. When the Send button is
+available, tapping it commits any pending input first. For an otherwise empty
+draft, press Return to commit before sending. The option is off by default;
+disable it to return to the ordinary system keyboard behavior.
 Android, web, desktop, software keyboards, and other iOS editors are unchanged.
 
 Conversion uses [azooKey 0.8.5](https://github.com/azooKey/AzooKeyKanaKanjiConverter/releases/tag/v0.8.5)
@@ -37,9 +38,9 @@ or input learning is enabled. Once per clone, run `bash modules/t3-composer-edit
 from `apps/mobile` before generating/installing Pods. The script verifies a
 fixed commit and turns off upstream debug input logging. Builds without the
 prepared package retain system input and hide the option. The feature requires
-a new native client, not only a Metro refresh. For this fork only use local builds: set
-`T3_NATIVE_CLIENT_BUILD=local T3_NATIVE_CLIENT_CACHE=off` if using
-`mobile:install`. Do not dispatch upstream builds or upload to shared caches.
+a freshly generated native client, not only a Metro refresh or a previously
+cached native client. Build locally with `vp run ios:dev`. Do not dispatch
+upstream builds or upload to shared caches.
 
 ## Development
 

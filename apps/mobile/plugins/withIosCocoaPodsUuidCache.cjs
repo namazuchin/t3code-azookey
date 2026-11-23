@@ -23,6 +23,18 @@ const UUID_REPAIR = `${MARKER}
     pods_project.instance_variable_set(:@available_uuids, [])
     pods_project.generate_available_uuid_list(1_000)
     Pod::UI.puts "T3Code: reset CocoaPods UUID allocator at #{next_index} (#{existing_uuids.length} existing objects)"
+
+    # RN puts Swift-only static SPM pods in one products directory. This pod has
+    # no public Objective-C headers; an umbrella overlaps ClerkExpo in Clang.
+    azookey_ready = File.join(__dir__, '../../../.t3/azookey-ios/.t3-quiet-azookey')
+    if File.file?(azookey_ready)
+      name = 'T3ComposerEditor'
+      modulemap = installer.sandbox.target_support_files_dir(name).join("#{name}.modulemap")
+      unless File.read(modulemap).include?("module #{name} {")
+        raise 'azooKey: unexpected T3ComposerEditor CocoaPods module map'
+      end
+      File.write(modulemap, "module #{name} {\\n  export *\\n}\\n")
+    end
 `;
 
 module.exports = function withIosCocoaPodsUuidCache(config) {
